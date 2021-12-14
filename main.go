@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"os/signal"
@@ -48,6 +49,9 @@ func main() {
 			}
 		}
 	}()
+	log.Info("m3u8_cli version " + VERSION)
+	log.Info("go version " + GO_VERSION)
+	log.Info("build time " + BUILD_TIME)
 	CurrentPath, err := filepath.Abs(filepath.Dir(os.Args[0]))
 	if err != nil {
 		log.Error(lang.Lang.ProjectPathError)
@@ -204,21 +208,28 @@ func main() {
 		},
 	}
 
+	if len(os.Args) == 1 {
+		fmt.Printf("\n\033[1;36;40m%s\033[0m", "m3u8_cli")
+		fmt.Print(">")
+		inputReader := bufio.NewReader(os.Stdin)
+		input, err := inputReader.ReadString('\n')
+		if err == nil {
+			fmt.Printf("The input was: %s\n", input)
+		}
+	}
+
 	if err := app.Run(os.Args); err != nil {
 		log.Error(err.Error())
 	}
 }
 
 func run(c *cli.Context) error {
-	if ffmpeg.Init(c.String("ffmpeg.path")) != nil {
+	if ffmpeg.Init(c.String("ffmpegPath")) != nil {
 		fmt.Printf("\033[1;31;40m%s\033[0m\n", lang.Lang.FfmpegLost)
 		fmt.Printf("\033[1;31;40m%s\033[0m\n\n", lang.Lang.FfmpegTip)
 		log.Info("http://ffmpeg.org/download.html")
 		tool.Pause()
 	}
-	log.Info("m3u8_cli version " + VERSION)
-	log.Info("go version " + GO_VERSION)
-	log.Info("build time " + BUILD_TIME)
 	log.Info(lang.Lang.StartUp)
 	return nil
 }

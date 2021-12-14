@@ -3,6 +3,7 @@ package ffmpeg
 import (
 	"errors"
 	"os"
+	"os/exec"
 	"path"
 	"runtime"
 
@@ -32,6 +33,13 @@ func Exists(path string) bool {
 }
 
 func Init(ffmpegPath string) error {
+	cmd := exec.Command("ffmpeg")
+	if cmd.Path != "ffmpeg" {
+		ffmpeg_path = cmd.Path
+	}
+	if Exists(ffmpeg_path) {
+		return nil
+	}
 	sysType := runtime.GOOS
 	_, filename, _, ok := runtime.Caller(1)
 	if ok {
