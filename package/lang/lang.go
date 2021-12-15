@@ -14,6 +14,14 @@ import (
 )
 
 type Contact struct {
+	AragError             string `json:"AragError"`
+	SavePath              string `json:"SavePath"`
+	FileName              string `json:"FileName"`
+	DirLongError          string `json:"DirLongError"`
+	FileNameError         string `json:"FileNameError"`
+	InputRetryCount       string `json:"InputRetryCount"`
+	UrlError              string `json:"UrlError"`
+	CommandError          string `json:"CommandError"`
 	Usage                 string `json:"Usage"`
 	StartUp               string `json:"StartUp"`
 	ProjectPathError      string `json:"ProjectPathError"`
@@ -21,6 +29,7 @@ type Contact struct {
 	FfmpegPathUsage       string `json:"FfmpegPathUsage"`
 	FfmpegLost            string `json:"FfmpegLost"`
 	FfmpegTip             string `json:"FfmpegTip"`
+	Url                   string `json:"Url"`
 	WorkDir               string `json:"WorkDir"`
 	SaveName              string `json:"SaveName"`
 	BaseUrl               string `json:"BaseUrl"`
