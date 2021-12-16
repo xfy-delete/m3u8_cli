@@ -4,12 +4,13 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"os"
 	"path"
 	"runtime"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/flytam/filenamify"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/xfy520/m3u8_cli/package/log"
 )
 
+// 判断是否是目录
 func IsDir(path string) bool {
 	s, err := os.Stat(path)
 	if err != nil {
@@ -25,10 +27,12 @@ func IsDir(path string) bool {
 	return s.IsDir()
 }
 
+// 判断是否是文件
 func IsFile(path string) bool {
 	return !IsDir(path)
 }
 
+// 判断目录是否存在
 func Exists(path string) bool {
 	_, err := os.Stat(path)
 	if err != nil {
@@ -37,21 +41,32 @@ func Exists(path string) bool {
 	return true
 }
 
+// 按任意键退出
 func Pause() {
 	fmt.Printf("\033[1;34;40m%s\033[0m", time.Now().Format("2006-01-02 15:04:05.000")+" ")
 	fmt.Printf("\033[1;32;40m%s\033[0m", lang.Lang.AnyKey)
 	b := make([]byte, 1)
 	os.Stdin.Read(b)
-	ExitFunc()
+	Exit()
 }
 
-func ExitFunc() {
+// 错误判断
+func Check(err error) {
+	if err != nil {
+		log.Error(err.Error())
+		Pause()
+	}
+}
+
+// 退出处理
+func Exit() {
 	log.Info("开始退出...")
 	log.Info("执行清理...")
 	log.Info("结束退出...")
 	os.Exit(0)
 }
 
+// 字符串判断三目
 func IfString(condition bool, trueVal string, falseVal string) string {
 	if condition {
 		return trueVal
@@ -59,14 +74,7 @@ func IfString(condition bool, trueVal string, falseVal string) string {
 	return falseVal
 }
 
-func TrimLastChar(s string) string {
-	r, size := utf8.DecodeLastRuneInString(s)
-	if r == utf8.RuneError && (size == 0 || size == 1) {
-		size = 0
-	}
-	return s[:len(s)-size]
-}
-
+// 解析字符串命令行
 func ParseCommandLine(command string) ([]string, error) {
 	var args []string
 	args = append(args, os.Args[0])
@@ -125,6 +133,7 @@ func ParseCommandLine(command string) ([]string, error) {
 	return args, nil
 }
 
+// 打开配置文件
 func openArgsFile(file_path string) (string, error) {
 	file, err := os.Open(file_path)
 	if err != nil {
@@ -147,6 +156,7 @@ func openArgsFile(file_path string) (string, error) {
 	return strings.Join(args, " "), nil
 }
 
+// 获取命令行配置参数
 func GetArgs(args []string, skip int) ([]string, error) {
 	argsLen := len(args)
 	if argsLen == 1 {
@@ -192,6 +202,7 @@ func GetArgs(args []string, skip int) ([]string, error) {
 	return args, nil
 }
 
+// 获取合法文件名
 func GetFileName(file_name string) string {
 	output, err := filenamify.Filenamify(file_name, filenamify.Options{
 		Replacement: ".",
@@ -203,6 +214,7 @@ func GetFileName(file_name string) string {
 	return output
 }
 
+// 通过url获取文件名
 func GetUrlFileName(url string) string {
 	if Exists(url) && IsFile(url) {
 		return path.Base(url)
@@ -213,4 +225,42 @@ func GetUrlFileName(url string) string {
 	} else {
 		return time.Now().Format("2006-01-02.15-04-05")
 	}
+}
+
+// 复制文件内容工具函数
+func CopyFile(srcFile string, destFile string) error {
+	file1, err := os.Open(srcFile)
+	if err != nil {
+		return err
+	}
+	var file2 *os.File
+	if Exists(destFile) {
+		file2, err = os.OpenFile(destFile, os.O_WRONLY|os.O_CREATE, os.ModePerm)
+	} else {
+		file2, err = os.Create(destFile)
+	}
+	if err != nil {
+		return err
+	}
+	defer file1.Close()
+	defer file2.Close()
+	_, err = io.Copy(file2, file1)
+	return err
+}
+
+// 读取文件工具函数
+func ReadFile(file_path string) ([]byte, error) {
+	if Exists(file_path) && IsFile(file_path) {
+		f, err := os.Open(file_path)
+		if err != nil {
+			return nil, err
+		}
+		defer f.Close()
+		fd, err := ioutil.ReadAll(f)
+		if err != nil {
+			return nil, err
+		}
+		return fd, err
+	}
+	return nil, errors.New(lang.Lang.FilePathError + file_path)
 }

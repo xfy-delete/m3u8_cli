@@ -1,0 +1,5 @@
+Log 2021-12-16
+Save Path: /home/my/go/src/m3u8_cli/Logs
+Task Start: 2021-12-16 22:34:48
+Task CommandLine: https://47b61.cdnedge.live/file/avple-images/hls/618d1ae5608a75437203be00/playlist.m3u8 --enableDelAfterDone --disableDateInfo --noProxy --noProxy
+ / (INFO) 开始解析 https://47b61.cdnedge.live/file/avple-images/hls/618d1ae5608a75437203be00/playlist.m3u8

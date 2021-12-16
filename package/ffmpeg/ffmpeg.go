@@ -11,6 +11,10 @@ import (
 
 var ffmpeg_path = ""
 
+var (
+	REC_TIME string = ""
+)
+
 func Init(ffmpegPath string) error {
 	cmd := exec.Command("ffmpeg")
 	if cmd.Path != "ffmpeg" {

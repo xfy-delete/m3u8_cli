@@ -14,6 +14,8 @@ import (
 )
 
 type Contact struct {
+	FilePathError         string `json:"FilePathError"`
+	StartParsing          string `json:"StartParsing"`
 	AragError             string `json:"AragError"`
 	SavePath              string `json:"SavePath"`
 	FileName              string `json:"FileName"`

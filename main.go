@@ -19,31 +19,33 @@ import (
 	"github.com/xfy520/m3u8_cli/package/lang"
 	"github.com/xfy520/m3u8_cli/package/log"
 	"github.com/xfy520/m3u8_cli/package/parser"
+	"github.com/xfy520/m3u8_cli/package/request"
 	"github.com/xfy520/m3u8_cli/package/tool"
 )
 
 var (
-	inputRetryCount int    = 30
-	VERSION         string = "1.0.0"
-	BUILD_TIME      string = "nil"
-	GO_VERSION      string = "1.17.1"
-	maxThreads      int    = runtime.NumCPU()
-	url             string = ""
-	minThreads      int    = 16
-	retryCount      int    = 15
-	timeOut         int    = 10
-	baseUrl         string = ""
-	reqHeaders      string = ""
-	keyFile         string = ""
-	keyBase64       string = ""
-	keyIV           string = ""
-	muxSetJson      string = "MUXSETS.json"
-	muxFastStart    bool   = false
-	delAfterDone    bool   = false
-	parseOnly       bool   = false
-	noMerge         bool   = false
-	fileName        string = ""
-	workDir         string = ""
+	inputRetryCount int      = 30
+	VERSION         string   = "1.0.0"
+	BUILD_TIME      string   = "nil"
+	GO_VERSION      string   = "1.17.1"
+	maxThreads      int      = runtime.NumCPU()
+	url             string   = ""
+	minThreads      int      = 16
+	retryCount      int      = 15
+	timeOut         int      = 10
+	baseUrl         string   = ""
+	reqHeaders      string   = ""
+	keyFile         string   = ""
+	keyBase64       string   = ""
+	keyIV           string   = ""
+	muxSetJson      string   = "MUXSETS.json"
+	muxFastStart    bool     = false
+	delAfterDone    bool     = false
+	parseOnly       bool     = false
+	noMerge         bool     = false
+	fileName        string   = ""
+	workDir         string   = ""
+	Args            []string = []string{}
 )
 
 func main() {
@@ -54,19 +56,19 @@ func main() {
 			switch s {
 			case syscall.SIGHUP:
 				fmt.Println("终端控制进程结束(终端连接断开)", s)
-				tool.ExitFunc()
+				tool.Exit()
 			case syscall.SIGINT:
 				fmt.Println("用户发送INTR字符(Ctrl+C)触发", s)
-				tool.ExitFunc()
+				tool.Exit()
 			case syscall.SIGTERM:
 				fmt.Println("结束程序(可以被捕获、阻塞或忽略)", s)
-				tool.ExitFunc()
+				tool.Exit()
 			case syscall.SIGQUIT:
 				fmt.Println("用户发送QUIT字符(Ctrl+/)触发", s)
-				tool.ExitFunc()
+				tool.Exit()
 			case syscall.SIGILL:
 				fmt.Println("非法指令(程序错误、试图执行数据段、栈溢出等)", s)
-				tool.ExitFunc()
+				tool.Exit()
 			default:
 				fmt.Println("其他错误退出，不作处理，继续执行程序", s)
 			}
@@ -237,6 +239,7 @@ func main() {
 		log.Error(lang.Lang.AragError)
 		tool.Pause()
 	} else {
+		Args = args
 		url = args[1]
 		args = append(args[:1], args[2:]...)
 		if err := app.Run(args); err != nil {
@@ -251,6 +254,7 @@ func run(c *cli.Context) error {
 	if !ok {
 		return errors.New(lang.Lang.ProjectPathError)
 	}
+	CurrentPath = path.Dir(CurrentPath)
 	if ffmpeg.Init(c.String("ffmpegPath")) != nil {
 		fmt.Printf("\033[1;31;40m%s\033[0m\n", lang.Lang.FfmpegLost)
 		fmt.Printf("\033[1;31;40m%s\033[0m\n\n", lang.Lang.FfmpegTip)
@@ -271,11 +275,11 @@ func run(c *cli.Context) error {
 	fmt.Println(WriteDate)
 	noMerge = c.Bool("noMerge")
 	fmt.Println(noMerge)
-	NoProxy := c.Bool("noProxy")
-	fmt.Println(NoProxy)
+
+	request.NoProxy = c.Bool("noProxy")
+
 	if c.String("proxyAddress") != "" && strings.HasPrefix(c.String("proxyAddress"), "http://") {
-		UseProxyAddress := c.String("proxyAddress")
-		fmt.Println(UseProxyAddress)
+		request.UseProxyAddress = c.String("proxyAddress")
 	}
 
 	if c.String("headers") != "" {
@@ -296,7 +300,7 @@ func run(c *cli.Context) error {
 	if c.String("workDir") != "" {
 		workDir = c.String("workDir")
 	} else {
-		workDir = path.Join(path.Dir(CurrentPath), "Downloads")
+		workDir = path.Join(CurrentPath, "Downloads")
 	}
 
 	if c.String("saveName") != "" {
@@ -408,12 +412,30 @@ func input(CurrentPath string) error {
 			}
 		}
 	}
+
 	log.Info(lang.Lang.FileName + fileName)
 	log.Info(lang.Lang.SavePath + path.Join(workDir, fileName))
 	parser := parser.New(fileName, path.Join(workDir, fileName), url, keyBase64, keyIV, keyFile, reqHeaders)
 	if baseUrl != "" {
 		parser.SetBaseUrl(baseUrl)
 	}
-	log.LogFile = path.Join(CurrentPath, "Logs", time.Now().Format("2006-01-02_15-04-05-000")+".log")
+	log.LogFile = path.Join(CurrentPath, "Logs", time.Now().Format("2006-01-02_15-04-05.000")+".log")
+	if err := log.InitLog(url + " " + strings.Join(append(Args[:0], Args[1:]...), " ")); err != nil {
+		return err
+	}
+	tool.Check(log.WriteInfo(lang.Lang.StartParsing + url))
+	log.Warn(lang.Lang.StartParsing + url)
+	if strings.HasSuffix(url, ".json") && tool.Exists(url) {
+		if !tool.Exists(path.Join(workDir, fileName)) {
+			if err := os.MkdirAll(path.Join(workDir, fileName), os.ModePerm); err != nil {
+				return err
+			}
+		}
+		if err := tool.CopyFile(url, path.Join(workDir, fileName, "meta.json")); err != nil {
+			return err
+		}
+	} else {
+		parser.Parse()
+	}
 	return nil
 }
