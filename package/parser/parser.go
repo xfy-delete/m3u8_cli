@@ -1,14 +1,18 @@
 package parser
 
 import (
+	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path"
+	"runtime"
 	"strings"
 
 	"github.com/xfy520/m3u8_cli/package/decode"
 	"github.com/xfy520/m3u8_cli/package/download"
 	"github.com/xfy520/m3u8_cli/package/ffmpeg"
+	"github.com/xfy520/m3u8_cli/package/lang"
 	"github.com/xfy520/m3u8_cli/package/tool"
 )
 
@@ -33,14 +37,14 @@ type Parser interface {
 }
 
 type parser struct {
-	DownName          string
-	DownDir           string
-	M3u8Url           string
-	KeyBase64         string
-	KeyIV             string
-	KeyFile           string
-	Headers           string
-	BaseUrl           string
+	downName          string
+	downDir           string
+	m3u8Url           string
+	keyBase64         string
+	keyIV             string
+	keyFile           string
+	headers           string
+	baseUrl           string
 	m3u8SavePath      string
 	jsonSavePath      string
 	extLists          []string
@@ -61,7 +65,7 @@ func SubtitleNew(Name string, Language string, Uri string) *Subtitle {
 }
 
 const (
-	BaseUrl      = ""
+	baseUrl      = ""
 	m3u8SavePath = ""
 	jsonSavePath = ""
 )
@@ -72,22 +76,22 @@ var (
 	MEDIA_SUB_GROUP   = make(map[string][]Subtitle)
 )
 
-func New(DownName string, DownDir string, M3u8Url string, KeyBase64 string, KeyIV string, KeyFile string, Headers string) Parser {
-	return &parser{DownName, DownDir, M3u8Url, KeyBase64, KeyIV, KeyFile,
-		Headers, BaseUrl, m3u8SavePath, jsonSavePath, extLists, MEDIA_AUDIO_GROUP,
+func New(downName string, downDir string, m3u8Url string, keyBase64 string, keyIV string, keyFile string, headers string) Parser {
+	return &parser{downName, downDir, m3u8Url, keyBase64, keyIV, keyFile,
+		headers, baseUrl, m3u8SavePath, jsonSavePath, extLists, MEDIA_AUDIO_GROUP,
 		MEDIA_SUB_GROUP,
 	}
 }
 
 func (p *parser) SetBaseUrl(baseUrl string) {
-	p.BaseUrl = baseUrl
+	p.baseUrl = baseUrl
 }
 
 func (p *parser) Parse() error {
 	ffmpeg.REC_TIME = ""
-	p.m3u8SavePath = path.Join(p.DownDir, "raw.m3u8")
-	if !tool.Exists(p.DownDir) {
-		if err := os.MkdirAll(p.DownDir, os.ModePerm); err != nil {
+	p.m3u8SavePath = path.Join(p.downDir, "raw.m3u8")
+	if !tool.Exists(p.downDir) {
+		if err := os.MkdirAll(p.downDir, os.ModePerm); err != nil {
 			return err
 		}
 	}
@@ -111,22 +115,63 @@ func (p *parser) Parse() error {
 		// totalDuration  float32  = 0
 		// expectSegment  bool     = false
 		// expectPlaylist bool     = false
-		// isEndlist      bool     = false
+		isEndlist bool = false
 		// isAd           bool     = false
 		// isM3u          bool     = false
 	)
-	if strings.Contains(p.M3u8Url, ".cntv.") {
-		p.M3u8Url = strings.ReplaceAll(p.M3u8Url, "/h5e/", "/")
+	if strings.Contains(p.m3u8Url, ".cntv.") {
+		p.m3u8Url = strings.ReplaceAll(p.m3u8Url, "/h5e/", "/")
 	}
-	if strings.HasPrefix(p.M3u8Url, "http") {
-		if strings.Contains(p.M3u8Url, "nfmovies.com/hls") {
-			infbytes, err := download.HttpDownloadFileToBytes(p.M3u8Url, p.Headers, 6)
+	if strings.HasPrefix(p.m3u8Url, "http") {
+		if strings.Contains(p.m3u8Url, "nfmovies.com/hls") {
+			infbytes, err := download.HttpDownloadFileToBytes(p.m3u8Url, p.headers, 60)
 			if err != nil {
 				return err
 			}
 			m3u8Content = decode.NfmoviesDecryptM3u8(infbytes)
+		} else if strings.Contains(p.m3u8Url, "hls.ddyunp.com/ddyun") || strings.Contains(p.m3u8Url, "hls.90mm.me/ddyun") {
+			m3u8Url, err := decode.GetVaildM3u8Url(p.m3u8Url)
+			if err != nil {
+				return err
+			}
+			infbytes, err := download.HttpDownloadFileToBytes(m3u8Url, p.headers, 60)
+			if err != nil {
+				return err
+			}
+			m3u8Content = decode.DdyunDecryptM3u8(infbytes)
+		} else {
+			infbytes, err := download.GetWebSource(p.m3u8Url, p.headers, 60)
+			if err != nil {
+				return err
+			}
+			m3u8Content = tool.BytesToStr(infbytes)
 		}
+	} else if strings.HasPrefix(p.m3u8Url, "file:") {
+		u, err := url.Parse(p.m3u8Url)
+		if err != nil {
+			return err
+		}
+		uri := u.Path
+		sysType := runtime.GOOS
+		uri = tool.IfString(sysType == "windows", uri[:1], uri)
+		infbytes, err := tool.ReadFile(uri)
+		if err != nil {
+			return err
+		}
+		m3u8Content = tool.BytesToStr(infbytes)
+	} else {
+		infbytes, err := tool.ReadFile(p.m3u8Url)
+		if err != nil {
+			return err
+		}
+		m3u8Content = tool.BytesToStr(infbytes)
+	}
+	if m3u8Content == "" {
+		return errors.New(lang.Lang.ParseError)
 	}
 	fmt.Println(m3u8Content)
+	if strings.Contains(p.m3u8Url, "tlivecloud-playback-cdn.ysp.cctv.cn") && strings.Contains(p.m3u8Url, "endtime") {
+		isEndlist = true
+	}
 	return nil
 }

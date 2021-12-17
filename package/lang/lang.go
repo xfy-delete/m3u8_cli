@@ -14,6 +14,8 @@ import (
 )
 
 type Contact struct {
+	ParseError            string `json:"ParseError"`
+	RedirectCountError    string `json:"RedirectCountError"`
 	FilePathError         string `json:"FilePathError"`
 	StartParsing          string `json:"StartParsing"`
 	AragError             string `json:"AragError"`

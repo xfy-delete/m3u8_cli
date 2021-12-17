@@ -24,11 +24,12 @@ import (
 )
 
 var (
-	inputRetryCount int      = 30
 	VERSION         string   = "1.0.0"
 	BUILD_TIME      string   = "nil"
 	GO_VERSION      string   = "1.17.1"
+	DEV             string   = "1"
 	maxThreads      int      = runtime.NumCPU()
+	inputRetryCount int      = 30
 	url             string   = ""
 	minThreads      int      = 16
 	retryCount      int      = 15
@@ -50,6 +51,7 @@ var (
 
 func main() {
 	c := make(chan os.Signal)
+	log.DEV = DEV
 	signal.Notify(c, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGILL)
 	go func() {
 		for s := range c {

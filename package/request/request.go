@@ -3,6 +3,7 @@ package request
 import (
 	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"io/ioutil"
 	"math/rand"
 	"net"
@@ -14,7 +15,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unsafe"
 
 	"github.com/andybalholm/brotli"
 
@@ -28,18 +28,13 @@ var (
 )
 
 type Request interface {
-	Send() ([]byte, error)
+	Send(redirectCount int) ([]byte, error)
+	Set(key string, value string)
 }
 
 type request struct {
 	client *http.Client
 	req    *http.Request
-}
-
-func str2bytes(s string) []byte {
-	x := (*[2]uintptr)(unsafe.Pointer(&s))
-	h := [3]uintptr{x[0], x[1], x[1]}
-	return *(*[]byte)(unsafe.Pointer(&h))
 }
 
 func Strval(value interface{}) string {
@@ -109,7 +104,7 @@ func getHeaderStr(headers string) string {
 }
 
 func getHeaderMap(headers string) map[string]interface{} {
-	headersBytes := str2bytes(getHeaderStr(headers))
+	headersBytes := tool.StrToBytes(getHeaderStr(headers))
 	if json.Valid(headersBytes) {
 		jsonMap := make(map[string]interface{})
 		err := json.Unmarshal(headersBytes, &jsonMap)
@@ -143,9 +138,9 @@ func New(uri string, method string, timeOut time.Duration, headers string) (Requ
 	r := rand.New(s)
 	req.Header = http.Header{}
 	userAgent := agent.UserAgent[r.Intn(len(agent.UserAgent))]
-	req.Header.Set("Accept-Encoding", "gzip, deflate")
-	req.Header.Set("Accept", "*/*")
-	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("accept-encoding", "gzip, deflate")
+	req.Header.Set("accept", "*/*")
+	req.Header.Set("user-agent", userAgent)
 	if headers != "" {
 		jsonMap := getHeaderMap(headers)
 		for k, v := range jsonMap {
@@ -178,7 +173,11 @@ func New(uri string, method string, timeOut time.Duration, headers string) (Requ
 	}, nil
 }
 
-func (r *request) Send() ([]byte, error) {
+func (r *request) Send(redirectCount int) ([]byte, error) {
+	if redirectCount == 0 && redirectCount != -1 {
+		return nil, errors.New("")
+	}
+	redirectCount -= 1
 	res, err := r.client.Do(r.req)
 	if err != nil {
 		return nil, err
@@ -190,7 +189,7 @@ func (r *request) Send() ([]byte, error) {
 			return nil, err
 		}
 		r.req.URL = loc
-		return r.Send()
+		return r.Send(redirectCount)
 	}
 	body := res.Body
 	if res.Header.Get("Content-Encoding") == "gzip" {

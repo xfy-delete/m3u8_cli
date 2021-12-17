@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -19,10 +20,15 @@ const (
 	ErrorLevel
 )
 
+var DEV = "1"
 var countGuard sync.RWMutex
 var LogFile = ""
 
 func PrintLine(msg string, Level Level) {
+	pc, _, _, _ := runtime.Caller(2)
+	if DEV == "1" {
+		msg = runtime.FuncForPC(pc).Name() + " " + msg
+	}
 	switch Level {
 	case InfoLevel:
 		fmt.Printf("\033[1;34;40m%s\033[0m", time.Now().Format("2006-01-02 15:04:05.000")+" ")

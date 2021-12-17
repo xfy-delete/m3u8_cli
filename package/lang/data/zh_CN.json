@@ -1,4 +1,6 @@
 {
+  "ParseError": "M3u8 解析异常",
+  "RedirectCountError": "重定向请求次数过多错误",
   "FilePathError": "文件路径错误或者不是文件: ",
   "StartParsing": "开始解析 ",
   "AragError": "参数错误",

@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strings"
 	"time"
+	"unsafe"
 
 	"github.com/flytam/filenamify"
 
@@ -135,25 +136,29 @@ func ParseCommandLine(command string) ([]string, error) {
 
 // 打开配置文件
 func openArgsFile(file_path string) (string, error) {
-	file, err := os.Open(file_path)
-	if err != nil {
-		log.Error(err.Error())
-		return "", err
-	}
-	args := []string{}
-	input := bufio.NewScanner(file)
-	for input.Scan() {
-		arg := input.Text()
-		if arg != "" {
-			if strings.HasPrefix(arg, "--") {
-				args = append(args, arg)
-			} else {
-				args = append(args, "--"+arg)
+	if Exists(file_path) && IsFile(file_path) {
+		file, err := os.Open(file_path)
+		if err != nil {
+			log.Error(err.Error())
+			return "", err
+		}
+		args := []string{}
+		input := bufio.NewScanner(file)
+		for input.Scan() {
+			arg := input.Text()
+			if arg != "" {
+				if strings.HasPrefix(arg, "--") {
+					args = append(args, arg)
+				} else {
+					args = append(args, "--"+arg)
+				}
 			}
 		}
+		file.Close()
+		return strings.Join(args, " "), nil
+	} else {
+		return "", nil
 	}
-	file.Close()
-	return strings.Join(args, " "), nil
 }
 
 // 获取命令行配置参数
@@ -263,4 +268,28 @@ func ReadFile(file_path string) ([]byte, error) {
 		return fd, err
 	}
 	return nil, errors.New(lang.Lang.FilePathError + file_path)
+}
+
+// 字符串转字节数组
+func StrToBytes(s string) []byte {
+	x := (*[2]uintptr)(unsafe.Pointer(&s))
+	h := [3]uintptr{x[0], x[1], x[1]}
+	return *(*[]byte)(unsafe.Pointer(&h))
+}
+
+// 字节数组转字符串
+func BytesToStr(b []byte) string {
+	return *(*string)(unsafe.Pointer(&b))
+}
+
+// 获取本地时间与世界标准时间差秒数或者毫秒数
+func GetTimeStamp(bflag bool) int64 {
+	now := time.Date(1970, 1, 1, 0, 0, 0, 0, time.Local)
+	utc := time.Now().UTC()
+	ts := utc.Sub(now)
+	if bflag {
+		return int64(ts.Seconds())
+	} else {
+		return ts.Milliseconds()
+	}
 }
