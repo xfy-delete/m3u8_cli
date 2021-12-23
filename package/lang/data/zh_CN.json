@@ -1,4 +1,11 @@
 {
+  "ParseExit": "解析m3u8成功, 程序退出",
+  "StartReParsing": "重新解析m3u8......",
+  "SelectPlaylist": "已自动选择最高清晰度",
+  "WrtingMasterMeta": "写出playLists.json",
+  "MasterListFound": "识别到多个清晰度",
+  "WrtingMeta": "写出meta.json......",
+  "DownloadingExternalAudioTrack": "开始下载外挂音频......",
   "InvalidM3u8Error": "无效的m3u8......",
   "NotSupportMethodError": "不支持 %s 加密方式,将不被处理,且强制开启二进制合并",
   "DownloadingM3u8Key": "获取m3u8 key...",

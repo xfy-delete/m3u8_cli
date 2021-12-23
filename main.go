@@ -14,7 +14,7 @@ import (
 
 	"github.com/urfave/cli/v2"
 
-	"github.com/xfy520/m3u8_cli/package/download/DownloadManager"
+	"github.com/xfy520/m3u8_cli/package/download/downloadManager"
 	"github.com/xfy520/m3u8_cli/package/ffmpeg"
 	"github.com/xfy520/m3u8_cli/package/lang"
 	"github.com/xfy520/m3u8_cli/package/log"
@@ -269,8 +269,9 @@ func run(c *cli.Context) error {
 
 	delAfterDone = c.Bool("enableDelAfterDone")
 	fmt.Println(delAfterDone)
+
 	parseOnly = c.Bool("enableParseOnly")
-	fmt.Println(parseOnly)
+
 	BinaryMerge := c.Bool("enableBinaryMerge")
 	fmt.Println(BinaryMerge)
 	WriteDate := !c.Bool("disableDateInfo")
@@ -399,7 +400,7 @@ func input(CurrentPath string) error {
 	}
 
 	if strings.Contains(url, "twitcasting") && strings.Contains(url, "/fmp4/") {
-		DownloadManager.BinaryMerge = true
+		downloadManager.BinaryMerge = true
 	}
 
 	// m3u8Content := ""
@@ -436,8 +437,8 @@ func input(CurrentPath string) error {
 	}
 	tool.Check(log.WriteInfo(lang.Lang.StartParsing + url))
 	log.Warn(lang.Lang.StartParsing + url)
-	if strings.HasSuffix(url, ".json") && tool.Exists(url) {
-		if !tool.Exists(path.Join(workDir, fileName)) {
+	if strings.HasSuffix(url, ".json") && tool.Exists(url) { //可直接跳过解析
+		if !tool.Exists(path.Join(workDir, fileName)) { //若文件夹不存在则新建文件夹
 			if err := os.MkdirAll(path.Join(workDir, fileName), os.ModePerm); err != nil {
 				return err
 			}
@@ -446,7 +447,13 @@ func input(CurrentPath string) error {
 			return err
 		}
 	} else {
-		m3u8Parser.M3u8Parse()
+		m3u8Parser.M3u8Parse() //开始解析
 	}
+
+	if parseOnly { //仅解析模式
+		log.Info(lang.Lang.ParseExit)
+		tool.Pause()
+	}
+
 	return nil
 }

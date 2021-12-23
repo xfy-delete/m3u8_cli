@@ -2,8 +2,9 @@ package parser
 
 import (
 	"bufio"
+	"encoding/json"
 	"errors"
-	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -12,10 +13,13 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/xfy520/m3u8_cli/package/decode"
 	"github.com/xfy520/m3u8_cli/package/download"
+	"github.com/xfy520/m3u8_cli/package/download/downloadManager"
 	"github.com/xfy520/m3u8_cli/package/ffmpeg"
+	"github.com/xfy520/m3u8_cli/package/global"
 	"github.com/xfy520/m3u8_cli/package/lang"
 	"github.com/xfy520/m3u8_cli/package/log"
 	"github.com/xfy520/m3u8_cli/package/request"
@@ -39,23 +43,42 @@ type subtitle struct {
 }
 
 var (
-	hasAd      = false
-	RangeStart = 0
-	RangeEnd   = -1
-	DelAd      = true
-	DurStart   = ""
-	DurEnd     = ""
+	hasAd            = false
+	RangeStart int64 = 0
+	RangeEnd   int64 = -1
+	DelAd            = true
+	DurStart         = ""
+	DurEnd           = ""
 )
 
 type segInfoObj struct {
-	expectByte int64
-	startByte  int64
-	index      int64
-	method     string
-	key        string
-	iv         string
-	duration   float64
-	segUri     string
+	ExpectByte int64   `json:"expectByte"`
+	StartByte  int64   `json:"startByte"`
+	Index      int64   `json:"index"`
+	Method     string  `json:"method,omitempty"`
+	Key        string  `json:"key,omitempty"`
+	Iv         string  `json:"iv,omitempty"`
+	Duration   float64 `json:"duration"`
+	SegUri     string  `json:"segUri,omitempty"`
+}
+
+type jsonResultObj struct {
+	M3u8        string          `json:"m3u8,omitempty"`
+	M3u8BaseUri string          `json:"m3u8BaseUri,omitempty"`
+	UpdateTime  string          `json:"updateTime,omitempty"`
+	M3u8Info    jsonM3u8InfoObj `json:"m3u8Info,omitempty"`
+}
+
+type jsonM3u8InfoObj struct {
+	OriginalCount  int64          `json:"originalCount"`
+	Count          int64          `json:"count"`
+	Vod            bool           `json:"vod"`
+	TargetDuration int64          `json:"targetDuration"`
+	TotalDuration  float64        `json:"totalDuration"`
+	Audio          string         `json:"audio,omitempty"`
+	Sub            string         `json:"sub,omitempty"`
+	ExtMAP         string         `json:"extMAP,omitempty"`
+	Segments       [][]segInfoObj `json:"segments,omitempty"`
 }
 
 func newAudio(Name string, Language string, Uri string, Channels string) *audio {
@@ -122,30 +145,30 @@ func (p *m3u8Parser) M3u8Parse() {
 	if !tool.Exists(p.DownDir) {
 		tool.Check(os.MkdirAll(p.DownDir, os.ModePerm))
 	}
-	// 存放分部的所有信息(#EXT-X-DISCONTINUITY)
-	//存放分片的所有信息
+
 	p.extLists = []string{}
 
 	p.media_audio_group = make(map[string][]audio)
 	p.media_sub_group = map[string][]subtitle{}
 
 	var (
-		parts          []interface{} = nil
-		segments       []segInfoObj  = []segInfoObj{}
-		segInfo        segInfoObj    = segInfoObj{}
-		m3u8Content    string        = ""
-		m3u8Method     string        = ""
-		extMAP         []string      = []string{"", ""}
-		extList        []string      = []string{}
-		segIndex       int64         = 0
-		startIndex     int64         = 0
-		targetDuration int64         = 0
-		totalDuration  float64       = 0
-		expectSegment  bool          = false
-		expectPlaylist bool          = false
-		isEndlist      bool          = false
-		isAd           bool          = false
-		isM3u          bool          = false
+		// 存放分部的所有信息(#EXT-X-DISCONTINUITY)
+		parts [][]segInfoObj = [][]segInfoObj{}
+		// 存放分片的所有信息
+		segments       []segInfoObj = []segInfoObj{}
+		segInfo        segInfoObj   = segInfoObj{}
+		m3u8Content    string       = ""
+		extMAP         []string     = []string{"", ""}
+		extList        []string     = []string{}
+		segIndex       int64        = 0
+		startIndex     int64        = 0
+		targetDuration int64        = 0
+		totalDuration  float64      = 0
+		expectSegment  bool         = false
+		expectPlaylist bool         = false
+		isEndlist      bool         = false
+		isAd           bool         = false
+		isM3u          bool         = false
 	)
 
 	if strings.Contains(p.M3u8Url, ".cntv.") {
@@ -301,13 +324,13 @@ func (p *m3u8Parser) M3u8Parse() {
 			if len(t) > 0 {
 				if len(t) == 1 {
 					expectByte, _ = strconv.ParseInt(t[0], 10, 64)
-					segInfo.expectByte = expectByte
+					segInfo.ExpectByte = expectByte
 				}
 				if len(t) == 2 {
 					expectByte, _ = strconv.ParseInt(t[0], 10, 64)
 					startByte, _ = strconv.ParseInt(t[1], 10, 64)
-					segInfo.expectByte = expectByte
-					segInfo.startByte = startByte
+					segInfo.ExpectByte = expectByte
+					segInfo.StartByte = startByte
 				}
 			}
 			expectSegment = true
@@ -320,9 +343,7 @@ func (p *m3u8Parser) M3u8Parse() {
 		} else if isAd { //国家地理去广告
 			continue
 		} else if strings.HasPrefix(line, tags.EXT_X_TARGETDURATION) { //解析定义的分段长度
-			f, _ := strconv.ParseFloat(strings.TrimSpace(strings.ReplaceAll(line, tags.EXT_X_TARGETDURATION+":", "")), 64)
-			t, _ := strconv.ParseInt(strconv.FormatFloat(f, 'E', -1, 64), 10, 64)
-			targetDuration = t
+			targetDuration, _ = strconv.ParseInt(strings.TrimSpace(strings.ReplaceAll(line, tags.EXT_X_TARGETDURATION+":", "")), 10, 64)
 		} else if strings.HasPrefix(line, tags.EXT_X_MEDIA_SEQUENCE) { // 解析起始编号
 			segI, _ := strconv.ParseInt(strings.ReplaceAll(line, tags.EXT_X_MEDIA_SEQUENCE+":", ""), 10, 64)
 			segIndex = segI
@@ -361,20 +382,20 @@ func (p *m3u8Parser) M3u8Parse() {
 		} else if strings.HasPrefix(line, tags.EXTINF) { // 解析分片时长(暂时不考虑标题属性)
 			tmp := strings.Split(strings.ReplaceAll(line, tags.EXTINF+":", ""), ",")
 			segDuration, _ = strconv.ParseFloat(tmp[0], 64)
-			segInfo.index = segIndex
-			segInfo.method = p.m3u8CurrentKey[0]
+			segInfo.Index = segIndex
+			segInfo.Method = p.m3u8CurrentKey[0]
 
 			if p.m3u8CurrentKey[0] != "NONE" { //是否有加密，有的话写入KEY和IV
-				segInfo.key = p.m3u8CurrentKey[1]
+				segInfo.Key = p.m3u8CurrentKey[1]
 				if p.m3u8CurrentKey[2] == "" {
 					// 暂定
-					segInfo.iv = "0x" + strconv.FormatInt(segIndex, 16)
+					segInfo.Iv = "0x" + strconv.FormatInt(segIndex, 16)
 				} else {
-					segInfo.iv = p.m3u8CurrentKey[2]
+					segInfo.Iv = p.m3u8CurrentKey[2]
 				}
 			}
 			totalDuration += segDuration
-			segInfo.duration = segDuration
+			segInfo.Duration = segDuration
 			expectSegment = true
 			segIndex++
 		} else if strings.HasPrefix(line, tags.EXT_X_STREAM_INF) { //解析STREAM属性
@@ -448,7 +469,7 @@ func (p *m3u8Parser) M3u8Parse() {
 		} else if strings.Contains(line, "\r\n") { //空白行不解析
 			continue
 		} else if expectSegment { //解析分片的地址
-			segUrl = p.CombineURL(p.bestUrl, line)
+			segUrl = p.CombineURL(p.BaseUrl, line)
 			if strings.Contains(p.M3u8Url, "?__gda__") {
 				reg := regexp.MustCompile(`\\?__gda__.*`)
 				s := reg.FindAllString(p.M3u8Url, -1)
@@ -463,7 +484,7 @@ func (p *m3u8Parser) M3u8Parse() {
 					segUrl += s[0]
 				}
 			}
-			segInfo.segUri = segUrl
+			segInfo.SegUri = segUrl
 			segments = append(segments, segInfo)
 			segInfo = segInfoObj{}
 
@@ -542,7 +563,202 @@ func (p *m3u8Parser) M3u8Parse() {
 		parts = append(parts, segments)
 	}
 
-  if p.audioUrl != "" && VI
+	if p.audioUrl != "" && global.VIDEO_TYPE == "IGNORE" {
+		log.WriteInfo(lang.Lang.StartParsing + p.audioUrl)
+		log.WriteInfo(lang.Lang.DownloadingExternalAudioTrack)
+		log.Warn(lang.Lang.DownloadingExternalAudioTrack)
+		dir, _ := ioutil.ReadDir(p.DownDir)
+		for _, d := range dir {
+			os.RemoveAll(path.Join([]string{p.DownDir, d.Name()}...))
+		}
+		p.M3u8Url = p.audioUrl
+		p.BaseUrl = ""
+		p.audioUrl = ""
+		p.bestUrlAudio = ""
+		p.M3u8Parse()
+		return
+	}
+	jsonResult := jsonResultObj{}
+	jsonResult.M3u8 = p.M3u8Url
+	jsonResult.M3u8BaseUri = p.BaseUrl
+	jsonResult.UpdateTime = time.Now().Format("2006-01-02 15:04:05.000")
+
+	jsonM3u8Info := jsonM3u8InfoObj{}
+	jsonM3u8Info.OriginalCount = segIndex - startIndex
+	jsonM3u8Info.Count = segIndex - startIndex
+	jsonM3u8Info.Vod = isEndlist
+	jsonM3u8Info.TargetDuration = targetDuration
+	jsonM3u8Info.TotalDuration = totalDuration
+
+	if p.bestUrlAudio != "" && p.media_audio_group[p.bestUrlAudio] != nil {
+		if len(p.media_audio_group[p.bestUrlAudio]) == 1 {
+			p.audioUrl = p.media_audio_group[p.bestUrlAudio][0].Uri
+		} else { //多种音频语言 让用户选择
+			// 暂定
+		}
+	}
+
+	if p.bestUrlSub != "" && p.media_sub_group[p.bestUrlSub] != nil {
+		if len(p.media_sub_group[p.bestUrlSub]) == 1 {
+			p.subUrl = p.media_sub_group[p.bestUrlSub][0].Uri
+		} else { //多种字幕语言 让用户选择
+			// 暂定
+		}
+	}
+
+	if p.audioUrl != "" {
+		jsonM3u8Info.Audio = p.audioUrl
+	}
+	if p.subUrl != "" {
+		jsonM3u8Info.Sub = p.subUrl
+	}
+	if extMAP[0] != "" {
+		downloadManager.HasExtMap = true
+		if extMAP[1] != "" {
+			jsonM3u8Info.ExtMAP = extMAP[0]
+		} else {
+			jsonM3u8Info.ExtMAP = extMAP[0] + "|" + extMAP[1]
+		}
+	} else {
+		downloadManager.HasExtMap = false
+	}
+
+	if DurStart != "" || DurEnd != "" { //根据DurRange来生成分片Range
+		var (
+			secStart float64 = 0
+			secEnd   float64 = -1
+		)
+		if DurEnd == "" {
+			secEnd = totalDuration
+		}
+		reg := regexp.MustCompile(`(\d+):(\d+):(\d+)`)
+		if reg.MatchString(DurStart) {
+			s := reg.FindAllString(DurStart, -1)
+			if len(s) >= 3 {
+				hh, _ := strconv.ParseInt(s[0], 10, 32)
+				mm, _ := strconv.ParseInt(s[1], 10, 32)
+				ss, _ := strconv.ParseInt(s[2], 10, 32)
+				secStart = float64(ss + mm*60 + hh*3600)
+			} else {
+				secStart = 0
+			}
+		}
+		if reg.MatchString(DurEnd) {
+			s := reg.FindAllString(DurEnd, -1)
+			if len(s) >= 3 {
+				hh, _ := strconv.ParseInt(s[0], 10, 32)
+				mm, _ := strconv.ParseInt(s[1], 10, 32)
+				ss, _ := strconv.ParseInt(s[2], 10, 32)
+				secEnd = float64(ss + mm*60 + hh*3600)
+			} else {
+				secEnd = 0
+			}
+		}
+		flag1 := false
+		flag2 := false
+		if secEnd-secStart > 0 {
+			var dur float64 = 0
+			for _, part := range parts {
+				for _, seg := range part {
+					dur += seg.Duration
+					if !flag1 && dur > secStart {
+						RangeStart = seg.Index
+						flag1 = true
+					}
+
+					if !flag2 && dur >= secEnd {
+						RangeEnd = seg.Index
+						flag2 = true
+					}
+				}
+			}
+		}
+	}
+
+	if RangeStart != 0 || RangeEnd != -1 { //根据Range来清除部分分片
+		if RangeEnd == -1 {
+			RangeEnd = segIndex - startIndex - 1
+		}
+		var (
+			newCount         int64          = 0
+			newTotalDuration float64        = 0
+			newParts         [][]segInfoObj = [][]segInfoObj{}
+		)
+		for _, part := range parts {
+			newPart := []segInfoObj{}
+			for _, seg := range part {
+				if RangeStart <= seg.Index && seg.Index <= RangeEnd {
+					newPart = append(newPart, seg)
+					newCount++
+					newTotalDuration += seg.Duration
+				}
+			}
+			if len(newPart) != 0 {
+				newParts = append(newParts, newPart)
+			}
+		}
+
+		parts = newParts
+		jsonM3u8Info.Count = newCount
+		jsonM3u8Info.TotalDuration = newTotalDuration
+	}
+
+	jsonM3u8Info.Segments = parts
+	jsonResult.M3u8Info = jsonM3u8Info
+
+	if !p.LiveStream {
+		log.WriteInfo(lang.Lang.WrtingMeta)
+		log.Info(lang.Lang.WrtingMeta)
+	}
+	jsonResultBytes, err := json.Marshal(jsonResult)
+	if err != nil {
+		log.WriteError(err.Error())
+		log.Error(err.Error())
+		return
+	}
+	tool.WriteFile(p.jsonSavePath, tool.BytesToStr(jsonResultBytes))
+	p.MasterListCheck()
+}
+
+func (p *m3u8Parser) MasterListCheck() {
+	if len(p.extLists) != 0 { //若存在多个清晰度条目，输出另一个json文件存放
+		tool.CopyFile(p.m3u8SavePath, path.Join(path.Dir(p.m3u8SavePath), "master.m3u8"))
+		log.WriteInfo("Master List Found")
+		log.Warn(lang.Lang.MasterListFound)
+		type jsonObj struct {
+			MasterUri      string      `json:"masterUri,omitempty"`
+			UpdateTime     string      `json:"updateTime,omitempty"`
+			PlayLists      []string    `json:"playLists,omitempty"`
+			AudioTracks    interface{} `json:"audioTracks,omitempty"`
+			SubtitleTracks interface{} `json:"subtitleTracks,omitempty"`
+		}
+		jso := jsonObj{}
+		jso.MasterUri = p.M3u8Url
+		jso.UpdateTime = time.Now().Format("2006-01-02 15:04:05.000")
+		jso.PlayLists = p.extLists
+		if p.media_audio_group != nil {
+			jso.AudioTracks = p.media_audio_group
+		}
+		if p.media_sub_group != nil {
+			jso.SubtitleTracks = p.media_sub_group
+		}
+		log.WriteInfo(lang.Lang.WrtingMasterMeta)
+		log.Info(lang.Lang.WrtingMasterMeta)
+		jsoBytes, err := json.Marshal(jso)
+		if err != nil {
+			log.WriteError(err.Error())
+			log.Error(err.Error())
+			return
+		}
+		tool.WriteFile(path.Join(path.Dir(p.jsonSavePath), "playLists.json"), tool.BytesToStr(jsoBytes))
+		log.WriteInfo(lang.Lang.SelectPlaylist + ": " + p.bestUrl)
+		log.Info(lang.Lang.SelectPlaylist)
+		log.WriteInfo(lang.Lang.StartReParsing)
+		log.Warn(lang.Lang.StartReParsing)
+		p.M3u8Url = p.bestUrl
+		p.BaseUrl = ""
+		p.M3u8Parse()
+	}
 }
 
 func (p *m3u8Parser) ParseKey(line string) []string {
@@ -601,7 +817,6 @@ func (p *m3u8Parser) ParseKey(line string) []string {
 
 func (p *m3u8Parser) CombineURL(baseurl string, uri string) string {
 	u, _ := url.Parse(baseurl)
-	fmt.Println("===========", baseurl, u.Host)
 	uu := u.Scheme + "://" + u.Host
 	if strings.HasPrefix(uri, "/") {
 		return uu + uri

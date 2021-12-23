@@ -277,7 +277,7 @@ func WriteFile(file_path string, text string) error {
 		var file *os.File
 		var err error
 		if Exists(file_path) {
-			file, err = os.OpenFile(file_path, os.O_APPEND, os.ModePerm)
+			file, err = os.OpenFile(file_path, os.O_WRONLY|os.O_TRUNC, os.ModePerm)
 		} else {
 			file, err = os.Create(file_path)
 		}
