@@ -95,7 +95,7 @@ func InitLog(command string) error {
 	return err
 }
 
-func WriteLine(log string, msg string) error {
+func writeLine(log string, msg string) error {
 	if !Exists(LogFile) {
 		return nil
 	}
@@ -114,11 +114,11 @@ func WriteLine(log string, msg string) error {
 }
 
 func WriteError(log string) error {
-	return WriteLine(log, "ERROR")
+	return writeLine(log, "ERROR")
 }
 
 func WriteInfo(log string) error {
-	return WriteLine(log, "INFO")
+	return writeLine(log, "INFO")
 }
 
 func Exists(path string) bool {

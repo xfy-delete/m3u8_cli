@@ -14,6 +14,7 @@ import (
 	"unsafe"
 
 	"github.com/flytam/filenamify"
+	"github.com/robertkrimen/otto"
 
 	"github.com/xfy520/m3u8_cli/package/lang"
 	"github.com/xfy520/m3u8_cli/package/log"
@@ -270,6 +271,26 @@ func ReadFile(file_path string) ([]byte, error) {
 	return nil, errors.New(lang.Lang.FilePathError + file_path)
 }
 
+// 写文件工具函数
+func WriteFile(file_path string, text string) error {
+	if IsFile(file_path) {
+		var file *os.File
+		var err error
+		if Exists(file_path) {
+			file, err = os.OpenFile(file_path, os.O_APPEND, os.ModePerm)
+		} else {
+			file, err = os.Create(file_path)
+		}
+		if err != nil {
+			return err
+		}
+		_, err = io.WriteString(file, text)
+		defer file.Close()
+		return err
+	}
+	return errors.New(lang.Lang.FilePathError + file_path)
+}
+
 // 字符串转字节数组
 func StrToBytes(s string) []byte {
 	x := (*[2]uintptr)(unsafe.Pointer(&s))
@@ -292,4 +313,39 @@ func GetTimeStamp(bflag bool) int64 {
 	} else {
 		return ts.Milliseconds()
 	}
+}
+
+func GetTagAttribute(attributeList string, key string) string {
+	if attributeList != "" {
+		tmp := strings.Trim(attributeList, " ")
+		if strings.Contains(tmp, key+"=") {
+			if tmp[strings.Index(tmp, key+"=")+len(key)+1] == '"' {
+				return tmp[strings.Index(tmp, key+"=")+len(key)+2 : strings.Index(tmp[0:strings.Index(tmp, key+"=")+len(key)+2], `"`)]
+			} else {
+				if strings.Contains(tmp[0:strings.Index(tmp, key+"=")+len(key)+2], ",") {
+					return tmp[strings.Index(tmp, key+"=")+len(key)+1 : strings.Index(tmp[0:strings.Index(tmp, key+"=")+len(key)+1], ",")]
+				} else {
+					return tmp[strings.Index(tmp, key+"=")+len(key)+1:]
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func JsParser(filePath string, functionName string, args ...interface{}) (result string) {
+	bytes, err := ioutil.ReadFile(filePath)
+	if err != nil {
+		panic(err)
+	}
+	vm := otto.New()
+	_, err = vm.Run(string(bytes))
+	if err != nil {
+		panic(err)
+	}
+	value, err := vm.Call(functionName, nil, args...)
+	if err != nil {
+		panic(err)
+	}
+	return value.String()
 }

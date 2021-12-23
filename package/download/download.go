@@ -28,7 +28,9 @@ func HttpDownloadFileToBytes(uri string, headers string, timeOut time.Duration) 
 		}
 		return infbytes, nil
 	}
-	req, err := request.New(uri, http.MethodGet, timeOut, headers)
+	req, err := request.New(uri, http.MethodGet, timeOut, true)
+	req.InitHeader()
+	req.SetHeaders(headers)
 	if err != nil {
 		return nil, err
 	}
@@ -36,12 +38,14 @@ func HttpDownloadFileToBytes(uri string, headers string, timeOut time.Duration) 
 }
 
 func GetWebSource(uri string, headers string, timeOut time.Duration) ([]byte, error) {
-	req, err := request.New(uri, http.MethodGet, timeOut, headers)
+	req, err := request.New(uri, http.MethodGet, timeOut, true)
 	if err != nil {
 		return nil, err
 	}
+	req.InitHeader()
 	req.Set("accept-encoding", "gzip, deflate, br")
 	req.Set("keep-alive", "false")
+	req.SetHeaders(headers)
 	if strings.Contains(uri, "pcvideo") && strings.Contains(uri, ".titan.mgtv.com") {
 		if !strings.Contains(uri, "/internettv/") {
 			req.Set("referer", "https://www.mgtv.com")

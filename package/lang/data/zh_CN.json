@@ -1,4 +1,7 @@
 {
+  "InvalidM3u8Error": "无效的m3u8......",
+  "NotSupportMethodError": "不支持 %s 加密方式,将不被处理,且强制开启二进制合并",
+  "DownloadingM3u8Key": "获取m3u8 key...",
   "ParseError": "M3u8 解析异常",
   "RedirectCountError": "重定向请求次数过多错误",
   "FilePathError": "文件路径错误或者不是文件: ",

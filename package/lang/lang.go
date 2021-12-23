@@ -14,6 +14,9 @@ import (
 )
 
 type Contact struct {
+	InvalidM3u8Error      string `json:"InvalidM3u8Error"`
+	NotSupportMethodError string `json:"NotSupportMethodError"`
+	DownloadingM3u8Key    string `json:"DownloadingM3u8Key"`
 	ParseError            string `json:"ParseError"`
 	RedirectCountError    string `json:"RedirectCountError"`
 	FilePathError         string `json:"FilePathError"`

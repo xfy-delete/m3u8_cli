@@ -417,10 +417,19 @@ func input(CurrentPath string) error {
 
 	log.Info(lang.Lang.FileName + fileName)
 	log.Info(lang.Lang.SavePath + path.Join(workDir, fileName))
-	parser := parser.New(fileName, path.Join(workDir, fileName), url, keyBase64, keyIV, keyFile, reqHeaders)
+
+	m3u8Parser := parser.NewM3u8Parser()
+	m3u8Parser.DownName = fileName
+	m3u8Parser.DownDir = path.Join(workDir, fileName)
+	m3u8Parser.M3u8Url = url
+	m3u8Parser.KeyBase64 = keyBase64
+	m3u8Parser.KeyIV = keyIV
+	m3u8Parser.KeyFile = keyFile
 	if baseUrl != "" {
-		parser.SetBaseUrl(baseUrl)
+		m3u8Parser.BaseUrl = baseUrl
 	}
+	m3u8Parser.Headers = reqHeaders
+
 	log.LogFile = path.Join(CurrentPath, "Logs", time.Now().Format("2006-01-02_15-04-05.000")+".log")
 	if err := log.InitLog(url + " " + strings.Join(append(Args[:0], Args[1:]...), " ")); err != nil {
 		return err
@@ -437,7 +446,7 @@ func input(CurrentPath string) error {
 			return err
 		}
 	} else {
-		parser.Parse()
+		m3u8Parser.M3u8Parse()
 	}
 	return nil
 }

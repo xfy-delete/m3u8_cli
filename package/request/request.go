@@ -30,6 +30,9 @@ var (
 type Request interface {
 	Send(redirectCount int) ([]byte, error)
 	Set(key string, value string)
+	InitHeader()
+	SetHeaders(headers string)
+	Get302() (string, error)
 }
 
 type request struct {
@@ -129,23 +132,28 @@ func (r *request) Set(key string, value string) {
 	r.req.Header.Set(key, value)
 }
 
-func New(uri string, method string, timeOut time.Duration, headers string) (Request, error) {
-	req, err := http.NewRequest(method, uri, nil)
-	if err != nil {
-		return nil, err
-	}
+func (r *request) InitHeader() {
 	s := rand.NewSource(time.Now().Unix())
-	r := rand.New(s)
-	req.Header = http.Header{}
-	userAgent := agent.UserAgent[r.Intn(len(agent.UserAgent))]
-	req.Header.Set("accept-encoding", "gzip, deflate")
-	req.Header.Set("accept", "*/*")
-	req.Header.Set("user-agent", userAgent)
+	r.req.Header = http.Header{}
+	userAgent := agent.UserAgent[rand.New(s).Intn(len(agent.UserAgent))]
+	r.req.Header.Set("accept-encoding", "gzip, deflate")
+	r.req.Header.Set("accept", "*/*")
+	r.req.Header.Set("user-agent", userAgent)
+}
+
+func (r *request) SetHeaders(headers string) {
 	if headers != "" {
 		jsonMap := getHeaderMap(headers)
 		for k, v := range jsonMap {
-			req.Header.Set(k, Strval(v))
+			r.req.Header.Set(k, Strval(v))
 		}
+	}
+}
+
+func New(uri string, method string, timeOut time.Duration, banRedirect bool) (Request, error) {
+	req, err := http.NewRequest(method, uri, nil)
+	if err != nil {
+		return nil, err
 	}
 	var proxy *url.URL = nil
 	if !NoProxy && UseProxyAddress != "" {
@@ -155,7 +163,13 @@ func New(uri string, method string, timeOut time.Duration, headers string) (Requ
 		client: &http.Client{
 			Timeout: time.Second * timeOut,
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-				return http.ErrUseLastResponse
+				if banRedirect {
+					return http.ErrUseLastResponse
+				}
+				if len(via) >= 30 {
+					return errors.New("redirect too times")
+				}
+				return nil
 			},
 			Transport: &http.Transport{
 				Proxy: http.ProxyURL(proxy),
@@ -207,4 +221,12 @@ func (r *request) Send(redirectCount int) ([]byte, error) {
 		return nil, err
 	}
 	return b, nil
+}
+
+func (r *request) Get302() (string, error) {
+	res, err := r.client.Do(r.req)
+	if err != nil {
+		return "", err
+	}
+	return res.Request.URL.String(), nil
 }
