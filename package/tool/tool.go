@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -223,7 +224,9 @@ func GetFileName(file_name string) string {
 // 通过url获取文件名
 func GetUrlFileName(url string) string {
 	if Exists(url) && IsFile(url) {
-		return path.Base(url)
+		filename := filepath.Base(url)
+		ext := filepath.Ext(url)
+		return path.Base(filename[0 : len(filename)-len(ext)])
 	}
 	urls := strings.Split(url, "/")
 	if len(urls) > 0 {

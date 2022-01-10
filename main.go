@@ -430,7 +430,6 @@ func input(CurrentPath string) error {
 		m3u8Parser.BaseUrl = baseUrl
 	}
 	m3u8Parser.Headers = reqHeaders
-
 	log.LogFile = path.Join(CurrentPath, "Logs", time.Now().Format("2006-01-02_15-04-05.000")+".log")
 	if err := log.InitLog(url + " " + strings.Join(append(Args[:0], Args[1:]...), " ")); err != nil {
 		return err

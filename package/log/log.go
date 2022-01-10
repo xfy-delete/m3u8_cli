@@ -24,33 +24,33 @@ var DEV = "1"
 var countGuard sync.RWMutex
 var LogFile = ""
 
-func PrintLine(msg string, Level Level) {
+func PrintLine(msg []string, Level Level) {
 	pc, _, _, _ := runtime.Caller(2)
 	if DEV == "1" {
-		msg = runtime.FuncForPC(pc).Name() + " " + msg
+		msg = append([]string{runtime.FuncForPC(pc).Name() + " "}, msg...)
 	}
 	switch Level {
 	case InfoLevel:
 		fmt.Printf("\033[1;34;40m%s\033[0m", time.Now().Format("2006-01-02 15:04:05.000")+" ")
-		fmt.Printf("\033[1;32;40m%s\033[0m\n", msg)
+		fmt.Printf("\033[1;32;40m%s\033[0m\n", strings.Join(msg, ""))
 	case WarnLevel:
 		fmt.Printf("\033[1;34;40m%s\033[0m", time.Now().Format("2006-01-02 15:04:05.000")+" ")
-		fmt.Printf("\033[1;33;40m%s\033[0m\n", msg)
+		fmt.Printf("\033[1;33;40m%s\033[0m\n", strings.Join(msg, ""))
 	default:
 		fmt.Printf("\033[1;34;40m%s\033[0m", time.Now().Format("2006-01-02 15:04:05.000")+" ")
-		fmt.Printf("\033[1;31;40m%s\033[0m\n", msg)
+		fmt.Printf("\033[1;31;40m%s\033[0m\n", strings.Join(msg, ""))
 	}
 }
 
-func Info(msg string) {
+func Info(msg ...string) {
 	PrintLine(msg, InfoLevel)
 }
 
-func Warn(msg string) {
+func Warn(msg ...string) {
 	PrintLine(msg, WarnLevel)
 }
 
-func Error(msg string) {
+func Error(msg ...string) {
 	PrintLine(msg, ErrorLevel)
 }
 
@@ -95,7 +95,7 @@ func InitLog(command string) error {
 	return err
 }
 
-func writeLine(log string, msg string) error {
+func writeLine(log []string, msg string) error {
 	if !Exists(LogFile) {
 		return nil
 	}
@@ -108,16 +108,16 @@ func writeLine(log string, msg string) error {
 	defer countGuard.Unlock()
 	defer file.Close()
 	write := bufio.NewWriter(file)
-	write.WriteString(time.Now().Format("") + " / (" + msg + ") " + log)
+	write.WriteString(time.Now().Format("") + " / (" + msg + ") " + strings.Join(log, ""))
 	write.Flush()
 	return nil
 }
 
-func WriteError(log string) error {
+func WriteError(log ...string) error {
 	return writeLine(log, "ERROR")
 }
 
-func WriteInfo(log string) error {
+func WriteInfo(log ...string) error {
 	return writeLine(log, "INFO")
 }
 
