@@ -16,7 +16,3 @@ require (
 	github.com/russross/blackfriday/v2 v2.0.1 // indirect
 	github.com/shurcooL/sanitized_anchor_name v1.0.0 // indirect
 )
-
-// https://10j99.cdnedge.live/file/avple-images/hls/618d1ae5608a75437203be00/playlist.m3u8
-
-// https://www123.sbcdnvideo.com/hls/tysxeiox4o66j6cdaatbxxqifod7frs5g3l5dorqslkbia23hmpf7ie7sgaa/index-v1-a1.m3u8
